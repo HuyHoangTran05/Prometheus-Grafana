@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- namespace.yaml
+- mysql-secret.yaml
+- mysql-service.yaml
+- mysql-statefulset.yaml
+- app-deployment.yaml
+- app-service.yaml
+- servicemonitor.yaml
+- prometheus-rules.yaml
+- alert-webhook.yaml
+images:
+- name: securingweb
+  newName: ghcr.io/huyhoangtran05/gchrandargocd
+  newTag: 3d00f5d03aafc2198655e343d64c7f8d516127b9

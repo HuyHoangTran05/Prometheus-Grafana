@@ -1,0 +1,69 @@
+# Helm values for kube-prometheus-stack on Minikube
+# - Allow discovering ServiceMonitors/PodMonitors/Rules across all namespaces
+# - Set an explicit Grafana admin password for easy local login
+# - Keep defaults otherwise (Alertmanager enabled, dashboards enabled)
+
+grafana:
+  adminUser: admin
+  adminPassword: admin
+  defaultDashboardsEnabled: true
+  service:
+    type: ClusterIP
+
+prometheus:
+  prometheusSpec:
+    # Discover ServiceMonitor, PodMonitor, and PrometheusRules in any namespace
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+    ruleSelector: {}
+    ruleNamespaceSelector: {}
+    scrapeInterval: 15s
+
+alertmanager:
+  # Configure Alertmanager routing and receivers (email, Slack, generic webhook)
+  config:
+    global:
+      resolve_timeout: 5m
+      # Replace the SMTP settings with your real SMTP server
+      smtp_smarthost: "smtp.example.com:587"
+      smtp_from: "alerts@example.com"
+      smtp_auth_username: "smtp-user"
+      smtp_auth_password: "smtp-password"
+      # Replace with your real Slack webhook URL
+      slack_api_url: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
+    route:
+      receiver: default
+      group_by: ["alertname", "namespace", "pod"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        # Send critical alerts to Slack additionally
+        - matchers:
+            - severity="critical"
+          receiver: slack
+        # Example: send all alerts from securingweb namespace to webhook, too
+        - matchers:
+            - namespace="securingweb"
+          receiver: webhook
+    receivers:
+      - name: default
+        email_configs:
+          - to: "you@example.com"
+            send_resolved: true
+            require_tls: true
+      - name: slack
+        slack_configs:
+          - channel: "#alerts"
+            send_resolved: true
+            title: "[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
+            text: >-
+              {{ range .Alerts -}}
+              *{{ .Labels.severity | default "warning" }}* {{ .Annotations.summary }} ({{ .Labels.namespace }}/{{ .Labels.pod }})\n
+              {{- end }}
+      - name: webhook
+        webhook_configs:
+          - url: "http://alert-webhook.monitoring.svc.cluster.local/alerts"
+            send_resolved: true

@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="https://www.thymeleaf.org">
+<head>
+    <title>Admin Page</title>
+</head>
+<body>
+    <h1>Admin Page</h1>
+    <p>Welcome, <span th:text="${#authentication.name}"></span>! You have ADMIN privileges.</p>
+    <a th:href="@{/home}">Back to Home</a>
+    <a th:href="@{/logout}">Logout</a>
+</body>
+</html>
+

@@ -1,0 +1,22 @@
+# Replace repoURL with your repository URL
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: securingweb
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/HuyHoangTran05/GCHRandArgoCD.git
+    targetRevision: main
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: securingweb
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+

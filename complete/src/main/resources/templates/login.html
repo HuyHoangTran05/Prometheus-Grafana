@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="https://www.thymeleaf.org">
+<head>
+    <title>Login</title>
+    <script>
+        function togglePassword() {
+            var pwd = document.getElementById('password');
+            pwd.type = pwd.type === 'password' ? 'text' : 'password';
+        }
+    </script>
+</head>
+<body>
+    <h2>Login</h2>
+    <div th:if="${param.error}">
+        <span style="color:red">Invalid username or password.</span>
+    </div>
+    <form th:action="@{/login}" method="post">
+        <div>
+            <label>Username:</label>
+            <input type="text" name="username" required />
+        </div>
+        <div>
+            <label>Password:</label>
+            <input type="password" name="password" id="password" required />
+            <button type="button" onclick="togglePassword()">Show/Hide</button>
+        </div>
+        <div>
+            <button type="submit">Login</button>
+        </div>
+    </form>
+</body>
+</html>

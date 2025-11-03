@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: securingweb-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: 1234
+      MYSQL_DATABASE: securingweb
+      MYSQL_USER: app
+      MYSQL_PASSWORD: apppass
+    ports:
+      - "3307:3306"  # hostPort:containerPort (changed to avoid conflict with local MySQL)
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p1234"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ./complete
+      dockerfile: Dockerfile
+    container_name: securingweb-app
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/securingweb?useSSL=false&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: app
+      SPRING_DATASOURCE_PASSWORD: apppass
+      # Optional: tune JVM
+      # JAVA_OPTS: -Xms256m -Xmx512m
+    restart: unless-stopped
+
+volumes:
+  db-data:

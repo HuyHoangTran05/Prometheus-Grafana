@@ -1,0 +1,29 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: securingweb-alerts
+  namespace: securingweb
+  labels:
+    role: alert-rules
+spec:
+  groups:
+    - name: securingweb.pod.cpu
+      rules:
+        - alert: HighPodCPUUsage
+          expr: |
+            (
+              sum by (namespace, pod) (
+                rate(container_cpu_usage_seconds_total{namespace="securingweb", image!="", container!="POD"}[1m])
+              )
+              /
+              sum by (namespace, pod) (
+                kube_pod_container_resource_limits{namespace="securingweb", resource="cpu", unit="core"}
+              )
+            ) * 100 > 80
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod CPU usage > 80% for 1m ({{ $labels.pod }})"
+            description: "CPU usage for pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is above 80% for more than 1 minute."
+

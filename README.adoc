@@ -1,0 +1,435 @@
+= Securing Web (Spring Boot + Security) – Hướng dẫn chạy
+
+:toc:
+:toclevels: 2
+
+Dự án minh họa Spring Security với Thymeleaf. Bạn có thể chạy trực tiếp (Gradle), bằng Docker Compose (ứng dụng + MySQL), hoặc triển khai trên Kubernetes. Ngoài ra, repo đã kèm sẵn pipeline CI/CD với GitHub Actions và ArgoCD.
+
+== 1) Yêu cầu
+
+- JDK 17
+- Gradle Wrapper (đã kèm dự án)
+- Docker Desktop (tùy chọn, nếu bạn muốn chạy bằng Docker/Compose)
+- MySQL 8 (tùy chọn, nếu bạn muốn chạy local không dùng Docker)
+- Kubernetes cluster (tùy chọn, cho phần K8s/ArgoCD)
+
+== 2) Cấu trúc thư mục
+
+- `initial/` – bước khởi đầu (ít tính năng hơn)
+- `complete/` – phiên bản hoàn chỉnh (dùng cho Docker/K8s và hướng dẫn dưới đây)
+- `k8s/` – manifest Kubernetes (Deployment/Service/MySQL/…)
+- `.github/workflows/` – workflow GitHub Actions (CI/CD)
+
+== 3) Chạy LOCAL (không Docker)
+
+. Chuẩn bị database MySQL (nếu chưa có): tạo database `securingweb` và cấp quyền cho user.
+. Cấu hình kết nối DB trong `complete/src/main/resources/application.properties` hoặc dùng biến môi trường:
++
+- `SPRING_DATASOURCE_URL` (ví dụ: `jdbc:mysql://localhost:3306/securingweb?useSSL=false&serverTimezone=UTC`)
+- `SPRING_DATASOURCE_USERNAME` (mặc định: `root`)
+- `SPRING_DATASOURCE_PASSWORD` (mặc định: `1234`)
+
+. Chạy ứng dụng bằng Gradle Wrapper (Windows – cmd.exe):
++
+[source,batch]
+----
+cd complete
+gradlew.bat bootRun
+----
+
+. Mở trình duyệt: `http://localhost:8080/home`
+
+== 4) Chạy bằng DOCKER COMPOSE (đề xuất nhanh gọn)
+
+Docker Compose đã được cấu hình sẵn ở file `docker-compose.yml` (gốc repo) để khởi tạo 2 service:
+- `db`: MySQL 8.0 (map cổng host `3307` -> container `3306` để tránh xung đột)
+- `app`: Spring Boot (map cổng `8080:8080`)
+
+. Build images (chạy ở thư mục gốc repo):
++
+[source,batch]
+----
+docker compose build
+----
+
+. Khởi động nền:
++
+[source,batch]
+----
+docker compose up -d
+----
+
+. Mở trình duyệt: `http://localhost:8080/home`
+
+. Dừng và xóa container (khi không dùng nữa):
++
+[source,batch]
+----
+docker compose down
+----
+
+Lưu ý:
+- MySQL trong compose xuất cổng ra host là `3307`. Nếu cần đổi, chỉnh `ports` trong `docker-compose.yml`.
+- Ứng dụng đọc thông tin DB qua biến môi trường (đã set trong compose):
+  `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`.
+
+== 5) Tài khoản mẫu (được khởi tạo tự động)
+
+- Admin: `admin` / `admin123` (ROLE_ADMIN)
+- User: `user` / `user123` (ROLE_USER)
+
+== 6) Các endpoint chính
+
+- `/home` – trang chào mừng (public)
+- `/hello` – yêu cầu đăng nhập
+- `/admin` – chỉ dành cho ROLE_ADMIN
+- `/login`, `/logout` – đăng nhập/đăng xuất
+
+== 7) Thông tin kỹ thuật
+
+- ORM: Spring Data JPA + MySQL 8 (driver `com.mysql.cj.jdbc.Driver`)
+- DDL: `spring.jpa.hibernate.ddl-auto=update` (tự tạo/sửa bảng khi cần)
+- Tạo dữ liệu mẫu: `DataInitializer` tạo sẵn role và user lần đầu chạy
+
+== 8) Khắc phục sự cố
+
+- Cổng 3306 đã được dùng trên máy:
+  - Compose đã map host `3307:3306`. Nếu vẫn xung đột, đổi `3307` thành số khác trong `docker-compose.yml`.
+- Docker Desktop chưa chạy: mở Docker Desktop trước khi `docker compose up -d`.
+- Ứng dụng không kết nối được DB:
+  - Kiểm tra log container: `docker compose logs securingweb-app` và `docker compose logs securingweb-mysql`.
+  - Đảm bảo biến môi trường DB chuẩn và DB đã healthy (compose có healthcheck).
+- Chạy local không Docker nhưng chưa tạo DB `securingweb`: hãy tạo DB và cấp quyền cho user (hoặc chỉnh lại URL/credentials).
+
+== 9) Phát triển & kiểm thử
+
+- Chạy lại nhanh (local):
++
+[source,batch]
+----
+cd complete
+gradlew.bat clean bootRun
+----
+
+- Chạy unit test:
++
+[source,batch]
+----
+cd complete
+gradlew.bat test
+----
+
+== 10) Tùy biến
+
+- Thay đổi cấu hình DB khi chạy Docker: chỉnh biến môi trường trong `docker-compose.yml` (service `app`).
+- Thay đổi JVM options khi chạy Docker: set `JAVA_OPTS` trong `docker-compose.yml` (ví dụ: `-Xms256m -Xmx512m`).
+
+== 11) Triển khai trên Kubernetes
+
+Yêu cầu:
+- Kubectl đã cài đặt và trỏ đúng context (Docker Desktop Kubernetes hoặc Minikube)
+- Docker CLI để build image
+
+Các manifest đã được cung cấp trong thư mục `k8s/`:
+- `namespace.yaml` – Namespace `securingweb`
+- `mysql-secret.yaml` – Thông tin DB (root, user/app)
+- `mysql-service.yaml` – Service nội bộ cho MySQL
+- `mysql-statefulset.yaml` – StatefulSet MySQL (PVC 1Gi)
+- `app-deployment.yaml` – Deployment Spring Boot app (image `securingweb:1.0` – sẽ được CI/CD ghi đè bằng Kustomize)
+- `app-service.yaml` – Service nội bộ cho app
+- `kustomization.yaml` – Gom tất cả manifest ở trên (CI/CD sẽ chỉnh image tại đây)
+
+. Build image ứng dụng
+
+- Docker Desktop (Kubernetes bật sẵn) dùng chung Docker Engine, nên chỉ cần build local:
+
+[source,batch]
+----
+cd complete
+docker build -t securingweb:1.0 -f Dockerfile .
+----
+
+- Minikube: cần nạp image vào Minikube. Có 2 cách:
+  - C1: Dùng Docker Engine của Minikube để build (Windows cmd)
+
+[source,batch]
+----
+REM Cách 1a: Thiết lập môi trường Docker của Minikube cho cmd hiện tại
+FOR /f "tokens=*" %i IN ('minikube -p minikube docker-env --shell=cmd') DO %i
+REM Sau đó build như bình thường
+cd complete
+docker build -t securingweb:1.0 -f Dockerfile .
+----
+
+  - C2: Build local rồi nạp vào Minikube
+
+[source,batch]
+----
+cd complete
+docker build -t securingweb:1.0 -f Dockerfile .
+minikube image load securingweb:1.0
+----
+
+. Tạo namespace và apply manifest
+
+[source,batch]
+----
+cd ..
+kubectl apply -f k8s\namespace.yaml
+kubectl apply -k k8s
+----
+
+Kiểm tra trạng thái:
+
+[source,batch]
+----
+kubectl -n securingweb get pods -w
+----
+
+. Truy cập ứng dụng
+
+Vì Service đang là ClusterIP, dùng port-forward để truy cập từ máy local:
+
+[source,batch]
+----
+kubectl -n securingweb port-forward svc/securingweb 8080:8080
+----
+
+Mở trình duyệt: `http://localhost:8080/home`
+
+Thông tin đăng nhập mẫu:
+- Admin: `admin` / `admin123`
+- User: `user` / `user123`
+
+. Dừng và dọn dẹp
+
+[source,batch]
+----
+kubectl delete -k k8s
+kubectl delete -f k8s\namespace.yaml
+----
+
+Ghi chú:
+- Nếu muốn truy cập không cần port-forward, bạn có thể đổi `app-service.yaml` sang `type: NodePort` hoặc tạo Ingress (tùy theo cluster có Ingress Controller chưa).
+- Dung lượng PVC MySQL mặc định là 1Gi (trong `mysql-statefulset.yaml`).
+- Với Minikube/Docker Desktop, StorageClass mặc định thường khả dụng; nếu Pod MySQL ở trạng thái `Pending`, kiểm tra StorageClass và PVC.
+- Trong môi trường production, cân nhắc dùng MySQL managed service thay vì chạy trong cluster.
+
+== 12) CI/CD với GitHub Actions + ArgoCD
+
+Mục tiêu: Tự động hóa build/test, build & push Docker image lên GHCR, cập nhật tag image trong `k8s/kustomization.yaml`, và để ArgoCD tự đồng bộ triển khai.
+
+Sơ đồ tham khảo: image:https://miro.medium.com/v2/resize:fit:1400/1*HGBcQQTfbjnn9NrnbFB1mw.png[CI/CD flow]
+
+=== 12.1 Chuẩn bị
+
+- Repository GitHub (bật GitHub Actions).
+- Container registry: khuyến nghị GHCR (GitHub Container Registry).
+- Kubernetes cluster có cài ArgoCD.
+
+Quyền/secret cần thiết:
+- Workflow đã cấu hình dùng `GITHUB_TOKEN` để push image lên GHCR. Hãy đảm bảo workflow có `permissions: packages: write, contents: write` (đã thiết lập sẵn trong file workflow).
+- Nếu dùng Docker Hub thay cho GHCR: tạo secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` và chỉnh lại bước login + biến `REGISTRY`/`IMAGE_NAME` trong workflow.
+
+=== 12.2 Cài ArgoCD (một lần trên cluster)
+
+[source,batch]
+----
+REM Cài đặt (namespace argocd)
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+REM Lấy password admin mặc định (tên pod server)
+kubectl -n argocd get pods
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+
+REM Mở UI (port-forward)
+kubectl -n argocd port-forward svc/argocd-server 8081:443
+----
+
+Mở trình duyệt: `https://localhost:8081` → đăng nhập `admin / <password ở trên>`.
+
+=== 12.3 Khai báo ArgoCD Application (GitOps)
+
+Sử dụng file mẫu `k8s/argocd-application.yaml` (sẵn trong repo). Sửa lại `repoURL` (điểm tới repo của bạn) và `targetRevision` (nhánh, mặc định `main`). Sau đó apply:
+
+[source,batch]
+----
+kubectl apply -f k8s\argocd-application.yaml
+----
+
+ArgoCD sẽ theo dõi thư mục `k8s/` trong repo và tự sync khi manifest thay đổi.
+
+=== 12.4 Thiết lập workflow GitHub Actions
+
+File workflow đã được thêm: `.github/workflows/ci-cd.yml` với 3 job:
+- Build & Test (Gradle, JDK 17)
+- Build & Push image (Docker Buildx → GHCR)
+- Cập nhật tag image trong `k8s/kustomization.yaml` bằng Kustomize và commit/push
+
+Luồng hoạt động:
+1) Push vào nhánh `main` sẽ kích hoạt workflow.
+2) Image được build từ `complete/` và push lên `ghcr.io/<owner>/securingweb` với tag `latest` và `<git-sha>`.
+3) Workflow chạy `kustomize edit set image securingweb=ghcr.io/<owner>/securingweb:<git-sha>` để cập nhật `k8s/kustomization.yaml`, commit và push.
+4) ArgoCD phát hiện thay đổi manifest và tự đồng bộ triển khai với image mới.
+
+Ghi chú:
+- Không cần cấp kubeconfig cho GitHub Actions vì deploy do ArgoCD xử lý.
+- Nếu repo là private, cần cấu hình ArgoCD có thể truy cập repo (thêm repo credentials trong ArgoCD).
+- Nếu dùng Docker Hub thay GHCR, chỉnh bước login và biến `REGISTRY`, `IMAGE_NAME` trong workflow.
+
+=== 12.5 Khắc phục sự cố CI/CD
+
+- Push image lên GHCR lỗi `denied`: kiểm tra `permissions` trong workflow (`packages: write`) và bật GHCR cho tổ chức/cá nhân.
+- ArgoCD `OutOfSync` hoặc `Progressing` lâu: xem events/logs của `securingweb-app` và MySQL, kiểm tra secrets/connection DB.
+- Kustomize báo không tìm thấy image: đảm bảo trong `k8s/app-deployment.yaml` đang dùng tên image `securingweb:<tag>` để lệnh `kustomize edit set image securingweb=...` bắt được và ghi đè.
+
+== 13) License
+
+Phát hành theo giấy phép trong `LICENSE.txt`.
+
+== 14) Giám sát Kubernetes với Prometheus, Grafana, Alertmanager (Minikube)
+
+Mục tiêu: Cài đặt kube-prometheus-stack bằng Helm, tự động phát hiện Service/Pod/Rule trong mọi namespace, trực quan hóa trên Grafana, và gửi cảnh báo qua Alertmanager (webhook/email/Slack). Tất cả lệnh dưới đây là một dòng, dùng được trong cả PowerShell và cmd.
+
+=== 14.1 Chuẩn bị
+
+- Đã cài: Minikube, kubectl, Helm 3.
+- Cluster đã chạy và context trỏ đúng:
++
+[source,batch]
+----
+minikube start
+kubectl config use-context minikube
+kubectl get nodes
+----
+
+Ghi chú Minikube: Nếu muốn thay đổi CPU/RAM cho cluster đã tồn tại, cần xóa và tạo lại:
++
+[source,batch]
+----
+minikube delete
+minikube start --driver=docker --cpus=4 --memory=6144
+----
+
+=== 14.2 Cài đặt kube-prometheus-stack bằng Helm
+
+Repo đã kèm sẵn file cấu hình `k8s/monitoring-values.yaml` (mở discovery đa namespace, đặt mật khẩu Grafana admin/admin, cấu hình Alertmanager routes/receivers mẫu).
+
+Cài đặt/ cập nhật release (namespace `monitoring`):
++
+[source,batch]
+----
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm upgrade --install prometheus-stack prometheus-community/kube-prometheus-stack --namespace monitoring --create-namespace -f k8s\monitoring-values.yaml
+----
+
+Chờ các Pod lên:
++
+[source,batch]
+----
+kubectl get pods -n monitoring
+----
+
+=== 14.3 Áp dụng manifest ứng dụng (ServiceMonitor/Rules)
+
+Sau khi CRD đã tồn tại (do Helm cài), apply kustomize để tạo ServiceMonitor và PrometheusRule cho app:
++
+[source,batch]
+----
+kubectl apply -k k8s
+----
+
+Kiểm tra tài nguyên đã được tạo:
++
+[source,batch]
+----
+kubectl get servicemonitor -A
+kubectl get prometheusrule -A
+----
+
+Bạn sẽ thấy `securingweb` (ServiceMonitor) và `securingweb-alerts` (PrometheusRule) trong namespace `securingweb`.
+
+=== 14.4 Truy cập Prometheus / Grafana / Alertmanager
+
+Dùng port-forward:
++
+[source,batch]
+----
+REM Prometheus UI
+kubectl -n monitoring port-forward svc/prometheus-stack-kube-prometheus-prometheus 9090:9090
+
+REM Grafana UI (đăng nhập: admin / admin)
+kubectl -n monitoring port-forward svc/prometheus-stack-grafana 3000:80
+
+REM Alertmanager UI
+kubectl -n monitoring port-forward svc/prometheus-stack-kube-prometheus-alertmanager 9093:9093
+----
+
+- Prometheus: http://localhost:9090 → Status → Targets (tìm các target `kubernetes-service-endpoints` chứa `securingweb` với path `/actuator/prometheus`).
+- Grafana: http://localhost:3000 → đăng nhập `admin` / `admin` → mở dashboard Kubernetes: “Kubernetes / Compute Resources / Namespace (Pods)”, “Pod”, “Cluster”, v.v.
+- Alertmanager: http://localhost:9093 → xem danh sách alerts và routing.
+
+Trong repo có `k8s/alert-webhook.yaml` triển khai một HTTP echo service để nhận alert (receiver `webhook` đã cấu hình trong `monitoring-values.yaml`). Xem log khi có cảnh báo:
++
+[source,batch]
+----
+kubectl -n monitoring logs deploy/alert-webhook --tail=200 -f
+----
+
+=== 14.5 Tạo tải để kích hoạt cảnh báo CPU > 80% trong 1 phút
+
+Quy tắc cảnh báo nằm ở `k8s/prometheus-rules.yaml` (tên alert `HighPodCPUUsage`, `for: 1m`). Tạo tải ngay trong cluster để đẩy CPU của Pod ứng dụng:
+
+Cách A – Dùng `busybox` tự loop gọi HTTP service:
++
+[source,batch]
+----
+REM Tạo deployment load generator trong namespace securingweb
+kubectl -n securingweb create deployment loadgen --image=busybox -- /bin/sh -c "while true; do wget -qO- http://securingweb:8080/ > /dev/null; done"
+
+REM Tăng số replica để tăng tải
+kubectl -n securingweb scale deployment loadgen --replicas=5
+----
+
+Đợi 1–3 phút để Prometheus thu thập và rule đánh giá. Kiểm tra:
+- Prometheus → Alerts: `HighPodCPUUsage` chuyển sang trạng thái Firing.
+- Alertmanager UI có alert tương ứng.
+- Log `alert-webhook` hiển thị POST payload khi alert bắn.
+
+Dừng loadgen khi xong:
++
+[source,batch]
+----
+kubectl -n securingweb delete deployment loadgen
+----
+
+Mẹo: `kubectl top` yêu cầu metrics-server. Với Minikube có thể bật nhanh:
++
+[source,batch]
+----
+minikube addons enable metrics-server
+kubectl -n securingweb top pods
+----
+
+=== 14.6 Thiết lập gửi Email/Slack thật (tùy chọn)
+
+Sửa các trường trong `k8s/monitoring-values.yaml`:
+- `alertmanager.config.global.smtp_smarthost`, `smtp_from`, `smtp_auth_username`, `smtp_auth_password`
+- `alertmanager.config.global.slack_api_url`
+
+Áp dụng lại giá trị Helm:
++
+[source,batch]
+----
+helm upgrade prometheus-stack prometheus-community/kube-prometheus-stack --namespace monitoring -f k8s\monitoring-values.yaml
+----
+
+=== 14.7 Khắc phục sự cố
+
+- Lỗi “no matches for kind ServiceMonitor/PrometheusRule”: Cần cài Helm chart trước (CRD tạo bởi kube-prometheus-stack), sau đó mới `kubectl apply -k k8s`.
+- PowerShell xuống dòng bằng `^` sẽ lỗi. Hãy dùng lệnh 1 dòng (như hướng dẫn) hoặc dùng backtick của PowerShell. Đơn giản nhất là chạy 1 dòng.
+- Grafana login: user/pass mặc định từ `k8s/monitoring-values.yaml` là `admin` / `admin`.
+- Không thấy target ứng dụng trong Prometheus: kiểm tra `ServiceMonitor` (`k8s/servicemonitor.yaml`) trỏ tới service `securingweb` cổng `http` (port name) và ứng dụng có expose `/actuator/prometheus`.
+- Cảnh báo không gửi: xem Alertmanager routes/receivers trong `monitoring-values.yaml`; kiểm tra UI Alertmanager và log `alert-webhook`.
