@@ -7,7 +7,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/HuyHoangTran05/GCHRandArgoCD.git
+    repoURL: https://github.com/HuyHoangTran05/Prometheus-Grafana.git
     targetRevision: main
     path: k8s
   destination:
