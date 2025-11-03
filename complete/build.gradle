@@ -1,6 +1,6 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '3.3.0'
+	id 'org.springframework.boot' version '3.5.7'
 }
 
 apply plugin: 'io.spring.dependency-management'
@@ -29,7 +29,7 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	implementation 'mysql:mysql-connector-java:8.0.33'
 	// Use in-memory H2 database for tests
-	testImplementation 'com.h2database:h2:2.2.224'
+	testImplementation 'com.h2database:h2:2.4.240'
 }
 
 test {
